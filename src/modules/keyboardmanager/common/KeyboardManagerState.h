@@ -3,6 +3,7 @@
 #include "LayoutMap.h"
 #include "Shortcut.h"
 #include "RemapShortcut.h"
+#include "KeyDelay.h"
 #include <interface/lowlevel_keyboard_event_data.h>
 #include <mutex>
 #include <winrt/Windows.UI.Xaml.Controls.h>
@@ -51,8 +52,11 @@ private:
     StackPanel currentShortcutUI;
     std::mutex currentShortcutUI_mutex;
 
+    KeyDelay escapeSingleKeyDelay;
+
     // Display a key by appending a border Control as a child of the panel.
     void AddKeyToLayout(const StackPanel& panel, const winrt::hstring& key);
+    void SelectDetectedRemapKey(DWORD key);
 public:
     // The map members and their mutexes are left as public since the maps are used extensively in dllmain.cpp.
     // Maps which store the remappings for each of the features. The bool fields should be initalised to false. They are used to check the current state of the shortcut (i.e is that particular shortcut currently pressed down or not).

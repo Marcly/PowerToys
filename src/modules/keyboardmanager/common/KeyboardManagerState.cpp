@@ -3,7 +3,16 @@
 
 // Constructor
 KeyboardManagerState::KeyboardManagerState() :
-    uiState(KeyboardManagerUIState::Deactivated), currentUIWindow(nullptr), currentShortcutUI(nullptr), currentSingleKeyUI(nullptr), detectedRemapKey(NULL)
+    uiState(KeyboardManagerUIState::Deactivated), 
+    currentUIWindow(nullptr), 
+    currentShortcutUI(nullptr), 
+    currentSingleKeyUI(nullptr), 
+    detectedRemapKey(NULL),
+    escapeSingleKeyDelay(
+        (DWORD) VK_ESCAPE, 
+        std::bind(&KeyboardManagerState::SelectDetectedRemapKey, this, std::placeholders::_1), 
+        std::bind(&KeyboardManagerState::ResetUIState, this)
+    )
 {
 }
 
@@ -213,22 +222,40 @@ DWORD KeyboardManagerState::GetDetectedSingleRemapKey()
     return detectedRemapKey;
 }
 
+void KeyboardManagerState::SelectDetectedRemapKey(DWORD key)
+{
+    std::lock_guard<std::mutex> guard(detectedRemapKey_mutex);
+    detectedRemapKey = key;
+    UpdateDetectSingleKeyRemapUI();
+    return;
+}
+
 // Function which can be used in HandleKeyboardHookEvent before the single key remap event to use the UI and suppress events while the remap window is active.
 bool KeyboardManagerState::DetectSingleRemapKeyUIBackend(LowlevelKeyboardEvent* data)
 {
     // Check if the detect key UI window has been activated
     if (CheckUIState(KeyboardManagerUIState::DetectSingleKeyRemapWindowActivated))
     {
-        // detect the key if it is pressed down
-        if (data->wParam == WM_KEYDOWN || data->wParam == WM_SYSKEYDOWN)
+        if (data->lParam->vkCode == VK_ESCAPE)
         {
-            std::unique_lock<std::mutex> detectedRemapKey_lock(detectedRemapKey_mutex);
-            detectedRemapKey = data->lParam->vkCode;
-            detectedRemapKey_lock.unlock();
-
-            UpdateDetectSingleKeyRemapUI();
+            if (data->wParam == WM_KEYDOWN)
+            {
+                escapeSingleKeyDelay.KeyDownEvent(data);
+            }
+            else if (data->wParam == WM_KEYUP)
+            {
+                escapeSingleKeyDelay.KeyUpEvent(data);
+            }
         }
-
+        else
+        {
+            // detect the key if it is pressed down
+            if (data->wParam == WM_KEYDOWN || data->wParam == WM_SYSKEYDOWN)
+            {
+                SelectDetectedRemapKey(data->lParam->vkCode);
+            }
+        }
+        
         // Suppress the keyboard event
         return true;
     }
